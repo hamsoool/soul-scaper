@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     MAX_PDF_SIZE_BYTES: int = Field(default=10 * 1024 * 1024, description="Max allowed PDF size in bytes (default 10MB)")
     HTTP_TIMEOUT_SECONDS: float = Field(default=30.0, description="HTTP timeout for web scraping and downloads")
     SYNC_INTERVAL_HOURS: int = Field(default=24, description="Sync frequency in hours")
+    ENABLE_SCRAPER_SCHEDULER: bool = Field(default=True, description="Enable running the scraper scheduler internally")
     
     # Server Settings
     HOST: str = Field(default="0.0.0.0")

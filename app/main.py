@@ -29,23 +29,25 @@ async def lifespan(app: FastAPI):
         # Automatically creates tables if they don't exist
         await conn.run_sync(Base.metadata.create_all)
     
-    # Start APScheduler for the 24h background job
-    start_scheduler()
-    
-    # If the database is completely empty, trigger a sync task in the background
-    async with async_session() as session:
-        result = await session.execute(select(func.count(Document.id)))
-        count = result.scalar()
-        if count == 0:
-            logger.info("Database is empty. Queueing first sync job...")
-            asyncio_loop = asyncio.get_event_loop()
-            asyncio_loop.create_task(execute_sync_job())
+    # Start APScheduler for the 24h background job if enabled
+    if settings.ENABLE_SCRAPER_SCHEDULER:
+        start_scheduler()
+        
+        # If the database is completely empty, trigger a sync task in the background
+        async with async_session() as session:
+            result = await session.execute(select(func.count(Document.id)))
+            count = result.scalar()
+            if count == 0:
+                logger.info("Database is empty. Queueing first sync job...")
+                asyncio_loop = asyncio.get_event_loop()
+                asyncio_loop.create_task(execute_sync_job())
             
     yield
     
     # Shutdown actions
     logger.info("Shutting down services...")
-    stop_scheduler()
+    if settings.ENABLE_SCRAPER_SCHEDULER:
+        stop_scheduler()
     await engine.dispose()
 
 import asyncio
