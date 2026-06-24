@@ -55,7 +55,7 @@ import asyncio
 
 app = FastAPI(
     title="Department of Energy Philippines PDF Aggregator API",
-    description="A highly optimized API to fetch, scrape, and aggregate DOE price adjustments and NCR pump price PDFs.",
+    description="A highly optimized API to fetch, scrape, and aggregate DOE price adjustments and North Luzon pump price PDFs.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -76,7 +76,7 @@ async def health_check():
 
 @app.get("/documents", response_model=List[DocumentListItem], tags=["Documents"])
 async def list_documents(
-    category: Optional[str] = Query(None, description="Filter by category (e.g. 'Price Adjustments' or 'NCR Pump Prices')"),
+    category: Optional[str] = Query(None, description="Filter by category (e.g. 'Price Adjustments' or 'North Luzon Pump Prices')"),
     limit: int = Query(20, ge=1, le=100, description="Number of items to retrieve"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     db: AsyncSession = Depends(get_db)
@@ -107,7 +107,7 @@ async def get_document(id: int, db: AsyncSession = Depends(get_db)):
 @app.get("/latest", response_model=List[DocumentListItem], tags=["Documents"])
 async def get_latest_documents(db: AsyncSession = Depends(get_db)):
     """Retrieves the single most recent document for each of the source categories."""
-    categories = ["Price Adjustments", "NCR Pump Prices"]
+    categories = ["Price Adjustments", "North Luzon Pump Prices"]
     latest_docs = []
     
     for cat in categories:
@@ -172,7 +172,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     total_count = total_result.scalar() or 0
     
     # Count documents per category
-    categories = ["Price Adjustments", "NCR Pump Prices"]
+    categories = ["Price Adjustments", "North Luzon Pump Prices"]
     cat_counts = {}
     for cat in categories:
         cat_result = await db.execute(select(func.count(Document.id)).filter(Document.source_category == cat))

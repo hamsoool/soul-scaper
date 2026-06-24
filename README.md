@@ -4,14 +4,14 @@ A highly optimized PDF aggregation and extraction API designed to automatically 
 
 Specifically targets:
 1. **Price Adjustments**: `https://doe.gov.ph/articles/group/liquid-fuels?maincat=Retail%20Pump%20Prices&subcategory=Price%20Adjustments&display_type=Card`
-2. **NCR Pump Prices**: `https://doe.gov.ph/articles/group/liquid-fuels?maincat=Retail%20Pump%20Prices&subcategory=NCR%20Pump%20Prices&display_type=Card`
+2. **North Luzon Pump Prices**: `https://doe.gov.ph/articles/group/liquid-fuels?maincat=Retail%20Pump%20Prices&subcategory=North%20Luzon%20Pump%20Prices&display_type=Card`
 
 ---
 
 ## Scraper Date Filtering Rules
 
 To optimize database storage and keep records clean, the scraper implements dynamic date filters:
-* **NCR Pump Prices**: Only downloads and extracts PDF links belonging to the **current calendar month and year** (e.g. only June 2026 reports).
+* **North Luzon Pump Prices**: Only downloads and extracts PDF links belonging to the **current calendar month and year** (e.g. only June 2026 reports).
 * **Price Adjustments**: Only downloads and extracts PDFs published within the **past 2 weeks** (last 14 days) relative to the execution timestamp.
 
 ---

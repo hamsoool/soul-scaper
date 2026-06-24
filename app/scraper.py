@@ -26,8 +26,8 @@ SOURCES = [
         "category": "Price Adjustments"
     },
     {
-        "url": "https://doe.gov.ph/articles/group/liquid-fuels?maincat=Retail%20Pump%20Prices&subcategory=NCR%20Pump%20Prices&display_type=Card",
-        "category": "NCR Pump Prices"
+        "url": "https://doe.gov.ph/articles/group/liquid-fuels?maincat=Retail%20Pump%20Prices&subcategory=North%20Luzon%20Pump%20Prices&display_type=Card",
+        "category": "North Luzon Pump Prices"
     }
 ]
 
@@ -354,7 +354,7 @@ async def scrape_source_page(client: httpx.AsyncClient, source_url: str, categor
                     # For price adjustments, the link text is often the article title or adjustment name
                     doc_title = link_text if len(link_text) > 10 else title
                 else:
-                    # For NCR pump prices, the link text is the date range (e.g. June 2 to 8, 2026)
+                    # For North Luzon pump prices, the link text is the date range (e.g. June 2 to 8, 2026)
                     # We combine it with the main article title for a better record description
                     doc_title = f"{title} - {link_text}"
                     
@@ -382,14 +382,14 @@ async def scrape_source_page(client: httpx.AsyncClient, source_url: str, categor
                 
                 # Apply Date Filters:
                 # 1. Price Adjustments: only the past 2 weeks (14 days)
-                # 2. NCR Pump Prices: only the current month and year
+                # 2. North Luzon Pump Prices: only the current month and year
                 now = datetime.now(timezone.utc)
                 if category == "Price Adjustments":
                     two_weeks_ago = now - timedelta(days=14)
                     if published_dt < two_weeks_ago:
                         logger.info(f"Filtering out '{doc_title}' published at {published_dt} (older than 2 weeks)")
                         continue
-                elif category == "NCR Pump Prices":
+                elif category == "North Luzon Pump Prices":
                     if published_dt.year != now.year or published_dt.month != now.month:
                         logger.info(f"Filtering out '{doc_title}' published at {published_dt} (outside current month/year {now.year}-{now.month})")
                         continue
