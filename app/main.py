@@ -14,6 +14,7 @@ from app.models import Document
 from app.schemas import DocumentListItem, DocumentRead, StatsResponse, SyncResponse
 from app.scheduler import start_scheduler, stop_scheduler, sync_state, execute_sync_job
 from app.scraper import sync_doe_data
+from app.security import verify_api_key
 
 # Configure logging format and levels
 logging.basicConfig(
@@ -79,7 +80,8 @@ async def list_documents(
     category: Optional[str] = Query(None, description="Filter by category (e.g. 'Price Adjustments' or 'North Luzon Pump Prices')"),
     limit: int = Query(20, ge=1, le=100, description="Number of items to retrieve"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _key: str = Depends(verify_api_key),
 ):
     """Retrieves a paginated list of aggregated documents, optionally filtered by category."""
     stmt = select(Document).order_by(Document.published_date.desc(), Document.created_at.desc())
@@ -92,7 +94,7 @@ async def list_documents(
     return documents
 
 @app.get("/documents/{id}", response_model=DocumentRead, tags=["Documents"])
-async def get_document(id: int, db: AsyncSession = Depends(get_db)):
+async def get_document(id: int, db: AsyncSession = Depends(get_db), _key: str = Depends(verify_api_key)):
     """Retrieves detailed information for a specific document, including its parsed text content."""
     stmt = select(Document).filter(Document.id == id)
     result = await db.execute(stmt)
@@ -105,7 +107,7 @@ async def get_document(id: int, db: AsyncSession = Depends(get_db)):
     return document
 
 @app.get("/latest", response_model=List[DocumentListItem], tags=["Documents"])
-async def get_latest_documents(db: AsyncSession = Depends(get_db)):
+async def get_latest_documents(db: AsyncSession = Depends(get_db), _key: str = Depends(verify_api_key)):
     """Retrieves the single most recent document for each of the source categories."""
     categories = ["Price Adjustments", "North Luzon Pump Prices"]
     latest_docs = []
@@ -144,7 +146,7 @@ async def run_manual_sync():
             sync_state["is_syncing"] = False
 
 @app.post("/sync", response_model=SyncResponse, status_code=status.HTTP_202_ACCEPTED, tags=["System"])
-async def trigger_sync(background_tasks: BackgroundTasks):
+async def trigger_sync(background_tasks: BackgroundTasks, _key: str = Depends(verify_api_key)):
     """Triggers the DOE website scraper manually in the background without blocking the API."""
     if sync_state["is_syncing"]:
         return SyncResponse(
@@ -165,7 +167,7 @@ async def trigger_sync(background_tasks: BackgroundTasks):
     )
 
 @app.get("/stats", response_model=StatsResponse, tags=["System"])
-async def get_stats(db: AsyncSession = Depends(get_db)):
+async def get_stats(db: AsyncSession = Depends(get_db), _key: str = Depends(verify_api_key)):
     """Returns diagnostics and summary statistics about the database and scraper runs."""
     # Count total documents
     total_result = await db.execute(select(func.count(Document.id)))

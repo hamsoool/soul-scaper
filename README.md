@@ -8,6 +8,24 @@ A REST API that automatically monitors, scrapes, and aggregates fuel price PDFs 
 
 ---
 
+## Authentication
+
+All endpoints (except `/health`) require an API key passed via the `X-API-Key` header.
+
+```bash
+# Example using curl
+curl -H "X-API-Key: your-api-key" https://soul-scaper.onrender.com/documents
+
+# Example using Python requests
+import requests
+headers = {"X-API-Key": "your-api-key"}
+response = requests.get("https://soul-scaper.onrender.com/documents", headers=headers)
+```
+
+**Missing or invalid key** → `401 Unauthorized`
+
+---
+
 ## Data Sources
 
 The API aggregates PDFs from two DOE page categories:
@@ -227,6 +245,7 @@ python sync.py
 
 ## Security
 
+- **API Key Authentication**: All data endpoints require a valid `X-API-Key` header. Keys are compared using constant-time `secrets.compare_digest` to prevent timing attacks.
 - **SSRF Prevention**: All URLs are validated and DNS-resolved before fetching. Only `doe.gov.ph` and `prod-cms.doe.gov.ph` resolving to public IPs are allowed.
 - **Size Limits**: PDF downloads are streamed and aborted if they exceed 10 MB.
 - **Timeouts**: All HTTP requests are capped at 30 seconds.

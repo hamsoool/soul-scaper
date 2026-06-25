@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     SYNC_INTERVAL_HOURS: int = Field(default=24, description="Sync frequency in hours")
     ENABLE_SCRAPER_SCHEDULER: bool = Field(default=True, description="Enable running the scraper scheduler internally")
     
+    # API Security
+    API_KEY: str = Field(description="Secret API key for authenticating requests. Required.")
+
     # Server Settings
     HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000)
