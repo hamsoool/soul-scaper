@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Tuple, Optional, Set
 import calendar
 
-from curl_cffi.requests import AsyncSession as AsyncHttpSession
+import httpx
 from bs4 import BeautifulSoup
 import fitz  # PyMuPDF
 from sqlalchemy.future import select
@@ -201,7 +201,7 @@ def parse_nuxt_state(js_content: str) -> Optional[Tuple[List[str], str, List]]:
         logger.error(f"Failed to load Nuxt arguments list as JSON: {e}")
         return None
 
-async def fetch_with_backoff(client: AsyncHttpSession, url: str, **kwargs):
+async def fetch_with_backoff(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
     """Fetches a URL with exponential backoff retry mechanism."""
     retries = 3
     delay = 1.0
@@ -219,7 +219,7 @@ async def fetch_with_backoff(client: AsyncHttpSession, url: str, **kwargs):
             logger.warning(f"HTTP attempt {attempt+1} failed for {url}: {e}. Retrying in {delay}s...")
             await asyncio.sleep(delay)
             delay = min(delay * 2, max_delay)
-    raise RuntimeError(f"Retries exhausted for {url}")
+    raise httpx.RequestError("Retries exhausted")
 
 def extract_pdf_text_sync(pdf_bytes: bytes) -> str:
     """Synchronous PDF text extraction using PyMuPDF."""
@@ -237,7 +237,7 @@ async def extract_pdf_text(pdf_bytes: bytes) -> str:
     """Wraps the blocking PyMuPDF parser in an async thread pool executor."""
     return await asyncio.to_thread(extract_pdf_text_sync, pdf_bytes)
 
-async def download_pdf_stream(client: AsyncHttpSession, url: str) -> bytes:
+async def download_pdf_stream(client: httpx.AsyncClient, url: str) -> bytes:
     """Streams a PDF file with strict size checks and timeout handling."""
     if not validate_and_resolve_url(url):
         raise ValueError(f"Security Policy Blocked: Unsafe URL {url}")
@@ -258,7 +258,7 @@ async def download_pdf_stream(client: AsyncHttpSession, url: str) -> bytes:
                         
             # Download and accumulate bytes up to the limit
             pdf_bytes = bytearray()
-            async for chunk in response.aiter_content(chunk_size=8192):
+            async for chunk in response.aiter_bytes(chunk_size=8192):
                 pdf_bytes.extend(chunk)
                 if len(pdf_bytes) > settings.MAX_PDF_SIZE_BYTES:
                     raise ValueError(f"PDF exceeded size limit during download: {len(pdf_bytes)} bytes")
@@ -268,7 +268,7 @@ async def download_pdf_stream(client: AsyncHttpSession, url: str) -> bytes:
         logger.error(f"Error during PDF download stream from {url}: {e}")
         raise e
 
-async def scrape_source_page(client: AsyncHttpSession, source_url: str, category: str) -> List[dict]:
+async def scrape_source_page(client: httpx.AsyncClient, source_url: str, category: str) -> List[dict]:
     """Scrapes a target DOE page and returns extracted document metadata records."""
     if not validate_and_resolve_url(source_url):
         logger.error(f"Security Policy Blocked: Source URL {source_url} is invalid or unsafe")
@@ -574,10 +574,7 @@ async def sync_doe_data(db_session: AsyncSession) -> dict:
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
-    session_kwargs = dict(timeout=settings.HTTP_TIMEOUT_SECONDS, allow_redirects=True, impersonate="chrome120")
-    if settings.PROXY_URL:
-        session_kwargs["proxy"] = settings.PROXY_URL
-    async with AsyncHttpSession(**session_kwargs) as client:
+    async with httpx.AsyncClient(timeout=settings.HTTP_TIMEOUT_SECONDS, follow_redirects=True) as client:
         # Step 1 & 2: Visit both pages and extract PDF links
         all_metadata = []
         for source in SOURCES:

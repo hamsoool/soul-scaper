@@ -14,7 +14,6 @@ class Settings(BaseSettings):
     HTTP_TIMEOUT_SECONDS: float = Field(default=30.0, description="HTTP timeout for web scraping and downloads")
     SYNC_INTERVAL_HOURS: int = Field(default=24, description="Sync frequency in hours")
     ENABLE_SCRAPER_SCHEDULER: bool = Field(default=True, description="Enable running the scraper scheduler internally")
-    PROXY_URL: str = Field(default="", description="Proxy URL for scraping (e.g. http://user:pass@host:port). Leave empty for direct connection.")
     
     # API Security
     API_KEY: str = Field(description="Secret API key for authenticating requests. Required.")

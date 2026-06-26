@@ -18,8 +18,6 @@ services:
         value: 10485760 # 10MB
       - key: PORT
         value: 8000
-      - key: PROXY_URL
-        value: ""  # Optional: set to http://user:pass@host:port if scraping from a blocked IP
       - key: API_KEY
         generateValue: true  # Render auto-generates a random secret
 
@@ -31,7 +29,7 @@ services:
     env: docker
     dockerfilePath: Dockerfile
     schedule: "0 0 * * *" # Runs daily at midnight UTC
-    buildCommand: "pip install curl_cffi"
+    buildCommand: "pip install httpx"
     # Calls the main web service URL to trigger the background sync task
     startCommand: "curl -X POST -H \"X-API-Key: $API_KEY\" https://doe-pdf-aggregator.onrender.com/sync"
     plan: free
