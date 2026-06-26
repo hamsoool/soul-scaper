@@ -1,12 +1,14 @@
-# Soul Scraper — Web Scraping API
+# Soul Scraper — Web Scraping & Document Aggregation API
 
-A REST API that automatically monitors, scrapes, and aggregates data from a website. Built with FastAPI and deployed on Render, with data stored in Supabase PostgreSQL.
+A REST API that automatically monitors, scrapes, extracts, and aggregates documents from configurable web sources. Built with FastAPI and deployed on Render, with data stored in Supabase PostgreSQL.
+
+Designed for websites that publish documents (such as PDFs), announcements, reports, bulletins, or datasets on a recurring basis.
 
 > ⚠️ Free-tier Render service — may take 30–60 seconds to wake up after inactivity.
 
 ---
 
-## Authentication
+# Authentication
 
 All endpoints (except `/health`) require an API key passed via the `X-API-Key` header.
 
@@ -16,62 +18,81 @@ curl -H "X-API-Key: your-api-key" https://soul-scaper.onrender.com/documents
 
 # Example using Python requests
 import requests
+
 headers = {"X-API-Key": "your-api-key"}
-response = requests.get("https://soul-scaper.onrender.com/documents", headers=headers)
+response = requests.get(
+    "https://soul-scaper.onrender.com/documents",
+    headers=headers
+)
 ```
 
 **Missing or invalid key** → `401 Unauthorized`
 
 ---
 
-## Data Sources
+# Data Sources
 
-The API aggregates PDFs from two DOE page categories:
+The API aggregates structured documents from one or more configured web sources.
 
-| Category | Source |
-| :--- | :--- |
-| **Price Adjustments** | Retail pump price adjustment bulletins (past 14 days) |
-| **North Luzon Pump Prices** | Weekly North Luzon regional price monitoring (current month) |
+Each source can define one or more categories depending on the website being monitored.
+
+Example categories include:
+
+| Category      | Description                    |
+| ------------- | ------------------------------ |
+| Reports       | Published reports              |
+| Bulletins     | News or announcement bulletins |
+| Price Updates | Scheduled pricing releases     |
+| Documents     | General PDF publications       |
+
+The scraping logic is configurable and can be adapted for different websites without changing the API interface.
 
 ---
 
-## API Endpoints
+# API Endpoints
 
-### `GET /health`
-Simple health check to confirm the API is running.
+## `GET /health`
 
-**Response:**
+Simple health check.
+
+**Response**
+
 ```json
-{ "status": "ok" }
+{
+  "status": "ok"
+}
 ```
 
 ---
 
-### `GET /documents`
-Returns a paginated list of aggregated documents, sorted by most recent first.
+## `GET /documents`
 
-**Query Parameters:**
+Returns a paginated list of aggregated documents sorted by newest first.
 
-| Parameter | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `limit` | integer | `20` | Number of results (max: 100) |
-| `offset` | integer | `0` | Pagination offset |
-| `category` | string | — | Filter by `Price Adjustments` or `North Luzon Pump Prices` |
+### Query Parameters
 
-**Example:**
+| Parameter | Type    | Default | Description                             |
+| --------- | ------- | ------- | --------------------------------------- |
+| limit     | integer | 20      | Number of documents to return (max 100) |
+| offset    | integer | 0       | Pagination offset                       |
+| category  | string  | —       | Filter by document category             |
+
+### Example
+
 ```
-GET /documents?category=Price Adjustments&limit=5
+GET /documents?category=Reports&limit=5
 ```
 
-**Response:**
+### Response
+
 ```json
 [
   {
     "id": 42,
-    "source_category": "Price Adjustments",
-    "title": "Price Adjustment Effective June 24, 2026",
-    "source_url": "https://doe.gov.ph/articles/...",
-    "pdf_url": "https://prod-cms.doe.gov.ph/documents/...",
+    "source_category": "Reports",
+    "title": "Monthly Report",
+    "source_url": "https://example.com/articles/...",
+    "pdf_url": "https://example.com/files/report.pdf",
     "published_date": "2026-06-24T00:00:00Z",
     "created_at": "2026-06-25T00:03:12Z",
     "updated_at": "2026-06-25T00:03:12Z"
@@ -81,62 +102,61 @@ GET /documents?category=Price Adjustments&limit=5
 
 ---
 
-### `GET /documents/{id}`
-Returns full details of a specific document including its extracted PDF text content.
+## `GET /documents/{id}`
 
-**Example:**
-```
-GET /documents/42
-```
+Returns full metadata together with the extracted document content.
 
-**Response:**
+### Response
+
 ```json
 {
   "id": 42,
-  "source_category": "Price Adjustments",
-  "title": "Price Adjustment Effective June 24, 2026",
-  "source_url": "https://doe.gov.ph/articles/...",
-  "pdf_url": "https://prod-cms.doe.gov.ph/documents/...",
+  "source_category": "Reports",
+  "title": "Monthly Report",
+  "source_url": "https://example.com/articles/...",
+  "pdf_url": "https://example.com/files/report.pdf",
   "published_date": "2026-06-24T00:00:00Z",
   "created_at": "2026-06-25T00:03:12Z",
   "updated_at": "2026-06-25T00:03:12Z",
-  "content": "Effectivity: June 24, 2026\nGasoline: -0.40/liter\nDiesel: -0.25/liter..."
+  "content": "Extracted PDF text..."
 }
 ```
 
 ---
 
-### `GET /latest`
-Returns the single most recent document for each category. Useful for quick checks on the latest price adjustments.
+## `GET /latest`
 
-**Response:**
+Returns the latest document from each configured category.
+
+### Response
+
 ```json
 [
   {
     "id": 42,
-    "source_category": "Price Adjustments",
-    ...
+    "source_category": "Reports"
   },
   {
     "id": 38,
-    "source_category": "North Luzon Pump Prices",
-    ...
+    "source_category": "Bulletins"
   }
 ]
 ```
 
 ---
 
-### `GET /stats`
-Returns database statistics and current scraper status.
+## `GET /stats`
 
-**Response:**
+Returns database statistics and scraper status.
+
+### Response
+
 ```json
 {
   "total_documents": 24,
   "documents_by_category": {
-    "Price Adjustments": 14,
-    "North Luzon Pump Prices": 10
+    "Reports": 14,
+    "Bulletins": 10
   },
   "last_sync_time": "2026-06-25T00:03:45Z",
   "system_status": "idle"
@@ -145,10 +165,12 @@ Returns database statistics and current scraper status.
 
 ---
 
-### `POST /sync`
-Triggers a manual scrape in the background. Returns immediately with `202 Accepted`.
+## `POST /sync`
 
-**Response:**
+Triggers a manual synchronization in the background.
+
+### Response
+
 ```json
 {
   "status": "accepted",
@@ -160,65 +182,95 @@ Triggers a manual scrape in the background. Returns immediately with `202 Accept
 
 ---
 
-## Architecture
+# Architecture
 
-This API uses a **hybrid sync architecture** due to DOE's IP-based access restrictions on cloud providers:
+Soul Scraper separates document ingestion from API serving.
 
 ```
-Local Machine (Windows Task Scheduler — daily at 12:00 AM)
-  └─ sync.py
-       ├─ scrapes doe.gov.ph using local IP
-       ├─ downloads & parses PDFs (PyMuPDF)
-       └─ writes extracted data to Supabase
-
-Supabase PostgreSQL (shared database)
-  └─ soul-scaper.onrender.com (Render — free tier)
-       ├─ GET /documents
-       ├─ GET /latest
-       └─ GET /stats
+Configured Website(s)
+        │
+        ▼
+    sync.py
+        │
+        ├── Crawl configured pages
+        ├── Discover new documents
+        ├── Download supported files
+        ├── Extract text & metadata
+        └── Store in database
+                │
+                ▼
+       PostgreSQL / SQLite
+                │
+                ▼
+      FastAPI REST API
+                │
+                ├── GET /documents
+                ├── GET /latest
+                ├── GET /stats
+                └── POST /sync
 ```
 
-The scraper runs locally because the DOE website blocks requests from cloud provider IP ranges (Render, GitHub Actions, etc.). The Render deployment handles all read-only API traffic.
+The synchronization process may run:
+
+* manually
+* on a schedule
+* via Task Scheduler
+* via cron
+* from another orchestration service
+
+depending on deployment requirements.
 
 ---
 
-## Local Setup
+# Local Setup
 
-### 1. Clone & Install
+## 1. Clone & Install
 
 ```bash
 git clone https://github.com/hamsoool/soul-scaper.git
+
 cd soul-scaper
+
 python -m venv venv
-venv\Scripts\activate        # Windows
+
+venv\Scripts\activate
+
 pip install -r requirements.txt
 ```
 
-### 2. Configure Environment
+---
 
-Copy the example env file and fill in your values:
+## 2. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
 ```env
-# Supabase PostgreSQL (production)
 DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres
 
-# Or SQLite for local testing (no Supabase needed)
-# DATABASE_URL=sqlite+aiosqlite:///./doe_scraper.db
+# Or SQLite
+
+# DATABASE_URL=sqlite+aiosqlite:///./scraper.db
 ```
 
-### 3. Run the API Server
+---
+
+## 3. Start the API
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Interactive Swagger docs available at: **http://127.0.0.1:8000/docs**
+Swagger UI:
 
-### 4. Run a Manual Sync
+```
+http://127.0.0.1:8000/docs
+```
+
+---
+
+## 4. Run Synchronization
 
 ```bash
 python sync.py
@@ -226,35 +278,58 @@ python sync.py
 
 ---
 
-## Tech Stack
+# Tech Stack
 
-| Component | Technology |
-| :--- | :--- |
-| Web Framework | FastAPI (async) |
-| Database | PostgreSQL via Supabase (`asyncpg`) / SQLite (local) |
-| ORM | SQLAlchemy 2.0 (async) |
-| HTTP Client | HTTPX (streamed downloads) |
-| HTML Parsing | BeautifulSoup4 |
-| PDF Extraction | PyMuPDF (fitz) |
-| Scheduler | APScheduler (`AsyncIOScheduler`) |
-| Deployment | Docker on Render (free tier) |
-
----
-
-## Security
-
-- **API Key Authentication**: All data endpoints require a valid `X-API-Key` header. Keys are compared using constant-time `secrets.compare_digest` to prevent timing attacks.
-- **SSRF Prevention**: All URLs are validated and DNS-resolved before fetching. Only `doe.gov.ph` and `prod-cms.doe.gov.ph` resolving to public IPs are allowed.
-- **Size Limits**: PDF downloads are streamed and aborted if they exceed 10 MB.
-- **Timeouts**: All HTTP requests are capped at 30 seconds.
-- **Thread Safety**: Blocking PDF parsing is offloaded to `asyncio.to_thread` to keep the API responsive.
+| Component      | Technology                     |
+| -------------- | ------------------------------ |
+| Web Framework  | FastAPI                        |
+| Database       | PostgreSQL (Supabase) / SQLite |
+| ORM            | SQLAlchemy 2.0                 |
+| HTTP Client    | HTTPX                          |
+| HTML Parsing   | BeautifulSoup4                 |
+| PDF Extraction | PyMuPDF                        |
+| Scheduler      | APScheduler                    |
+| Deployment     | Docker / Render                |
 
 ---
 
-## Disclaimer
+# Features
 
-This is an independent data aggregation tool and is not affiliated with, endorsed by, or officially connected to the Department of Energy (DOE) of the Philippines. All data is sourced from publicly available records on the official DOE portal.
+* Configurable scraping sources
+* Automatic document discovery
+* PDF downloading
+* Full-text extraction
+* Metadata indexing
+* Background synchronization
+* REST API
+* Pagination
+* Category filtering
+* API key authentication
+* Async architecture
+* PostgreSQL and SQLite support
 
-## License
+---
 
-MIT License — see [LICENSE](LICENSE) for details.
+# Security
+
+* API Key authentication using constant-time comparison.
+* SSRF protection through URL validation and DNS resolution.
+* Public-IP validation before downloading remote resources.
+* Configurable allowed host/domain whitelist.
+* Streamed downloads with configurable file size limits.
+* Request timeout protection.
+* Async-safe document parsing.
+
+---
+
+# Disclaimer
+
+Soul Scraper is a general-purpose document aggregation API.
+
+Users are responsible for ensuring that scraping activities comply with the terms of service, robots.txt policies, and applicable laws governing each target website.
+
+---
+
+# License
+
+MIT License — see LICENSE for details.
