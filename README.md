@@ -1,8 +1,6 @@
-# Soul Scraper — DOE Philippines Fuel Price API
+# Soul Scraper — Web Scraping API
 
-A REST API that automatically monitors, scrapes, and aggregates fuel price PDFs from the [Department of Energy Philippines](https://doe.gov.ph) website. Built with FastAPI and deployed on Render, with data stored in Supabase PostgreSQL.
-
-**Base URL:** `https://soul-scaper.onrender.com`
+A REST API that automatically monitors, scrapes, and aggregates data from a website. Built with FastAPI and deployed on Render, with data stored in Supabase PostgreSQL.
 
 > ⚠️ Free-tier Render service — may take 30–60 seconds to wake up after inactivity.
 
