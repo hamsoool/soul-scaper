@@ -14,14 +14,14 @@ All endpoints (except `/health`) require an API key passed via the `X-API-Key` h
 
 ```bash
 # Example using curl
-curl -H "X-API-Key: your-api-key" https://soul-scaper.onrender.com/documents
+curl -H "X-API-Key: your-api-key" https://example.onwebsite.com/documents
 
 # Example using Python requests
 import requests
 
 headers = {"X-API-Key": "your-api-key"}
 response = requests.get(
-    "https://soul-scaper.onrender.com/documents",
+    "https://example.onwebsite.com/documents",
     headers=headers
 )
 ```
