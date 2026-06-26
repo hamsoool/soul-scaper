@@ -18,6 +18,8 @@ services:
         value: 10485760 # 10MB
       - key: PORT
         value: 8000
+      - key: PROXY_URL
+        value: ""  # Optional: set to http://user:pass@host:port if scraping from a blocked IP
       - key: API_KEY
         generateValue: true  # Render auto-generates a random secret
 

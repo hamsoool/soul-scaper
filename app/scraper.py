@@ -574,7 +574,10 @@ async def sync_doe_data(db_session: AsyncSession) -> dict:
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
     
-    async with AsyncHttpSession(timeout=settings.HTTP_TIMEOUT_SECONDS, allow_redirects=True, impersonate="chrome120") as client:
+    session_kwargs = dict(timeout=settings.HTTP_TIMEOUT_SECONDS, allow_redirects=True, impersonate="chrome120")
+    if settings.PROXY_URL:
+        session_kwargs["proxy"] = settings.PROXY_URL
+    async with AsyncHttpSession(**session_kwargs) as client:
         # Step 1 & 2: Visit both pages and extract PDF links
         all_metadata = []
         for source in SOURCES:
