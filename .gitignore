@@ -170,3 +170,9 @@ Thumbs.db
 *.db-journal
 *.db-wal
 *.db-shm
+
+# OCR temporary dumps
+page_*_ocr_only.txt
+
+# Scratch directory
+scratch/

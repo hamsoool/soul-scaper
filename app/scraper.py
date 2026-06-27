@@ -2,6 +2,10 @@ import asyncio
 import re
 import json
 import logging
+import io
+import numpy as np
+from PIL import Image
+from rapidocr_onnxruntime import RapidOCR
 from datetime import datetime, timezone, timedelta
 from typing import List, Tuple, Optional, Set
 import calendar
@@ -251,7 +255,9 @@ def parse_price_range(val: str) -> Optional[List[float]]:
     floats = []
     for p in parts:
         try:
-            floats.append(float(p))
+            val_float = float(p)
+            if 30.0 <= val_float <= 150.0:
+                floats.append(val_float)
         except ValueError:
             pass
     return floats if floats else None
@@ -375,6 +381,221 @@ def extract_prices_from_pdf_sync(pdf_bytes: bytes) -> Optional[str]:
         logger.error(f"Error during extract_prices_from_pdf_sync: {e}")
         return None
 
+def extract_prices_from_pdf_ocr(pdf_bytes: bytes) -> Optional[str]:
+    """
+    OCR-based extraction fallback for scanned image PDFs to extract Zambales prices.
+    Uses RapidOCR to parse scanned tables.
+    """
+    try:
+        logger.info("Scanned PDF detected or vector extraction yielded no data. Falling back to OCR extraction...")
+        engine = RapidOCR()
+        results = {}
+        
+        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+            for page_idx, page in enumerate(doc):
+                pix = page.get_pixmap(dpi=150)
+                img_data = pix.tobytes("png")
+                
+                img = Image.open(io.BytesIO(img_data))
+                if img.mode == 'RGBA':
+                    img = img.convert('RGB')
+                img_np = np.array(img)
+                
+                result, _ = engine(img_np)
+                if not result:
+                    continue
+                
+                blocks = []
+                for line in result:
+                    coords, text, score = line
+                    text_str = text.strip()
+                    if not text_str:
+                        continue
+                    x = min(pt[0] for pt in coords)
+                    y = min(pt[1] for pt in coords)
+                    w = max(pt[0] for pt in coords) - x
+                    h = max(pt[1] for pt in coords) - y
+                    blocks.append({
+                        "text": text_str,
+                        "cx": x + w / 2,
+                        "cy": y + h / 2,
+                        "w": w,
+                        "h": h
+                    })
+                
+                if not blocks:
+                    continue
+                
+                blocks.sort(key=lambda b: b["cy"])
+                rows = []
+                current_row = []
+                last_cy = None
+                
+                for b in blocks:
+                    if last_cy is None:
+                        current_row.append(b)
+                        last_cy = b["cy"]
+                    elif abs(b["cy"] - last_cy) < 8:
+                        current_row.append(b)
+                        last_cy = sum(item["cy"] for item in current_row) / len(current_row)
+                    else:
+                        current_row.sort(key=lambda item: item["cx"])
+                        rows.append(current_row)
+                        current_row = [b]
+                        last_cy = b["cy"]
+                if current_row:
+                    current_row.sort(key=lambda item: item["cx"])
+                    rows.append(current_row)
+                
+                header_row = None
+                header_idx = -1
+                for idx, r in enumerate(rows):
+                    row_texts = [b["text"].upper() for b in r]
+                    if any("PROV" in t for t in row_texts) and any("PRODUCT" in t for t in row_texts) and any("CITY" in t or "MUN" in t for t in row_texts):
+                        header_row = r
+                        header_idx = idx
+                        break
+                
+                if not header_row:
+                    continue
+                
+                province_cx = None
+                city_cx = None
+                product_cx = None
+                range_cx = None
+                common_cx = None
+                station_columns = []
+                
+                for b in header_row:
+                    txt = b["text"].upper()
+                    if "PROV" in txt:
+                        province_cx = b["cx"]
+                    elif "CITY" in txt or "MUN" in txt:
+                        city_cx = b["cx"]
+                    elif "PRODUCT" in txt:
+                        product_cx = b["cx"]
+                    elif "RANGE" in txt or "OVERALL" in txt:
+                        range_cx = b["cx"]
+                    elif "COMMON" in txt or "PRICE" in txt:
+                        common_cx = b["cx"]
+                    else:
+                        brand = b["text"].strip()
+                        if brand:
+                            station_columns.append((b["cx"], brand))
+                
+                if province_cx is None: province_cx = 200
+                if city_cx is None: city_cx = 350
+                if product_cx is None: product_cx = 450
+                
+                province_anchors = []
+                city_anchors = []
+                
+                for r in rows[header_idx + 1:]:
+                    for b in r:
+                        txt_upper = b["text"].upper()
+                        if abs(b["cx"] - province_cx) < 60:
+                            if "TARLAC" in txt_upper or "ZAMBALES" in txt_upper:
+                                province_anchors.append((b["cy"], txt_upper))
+                        elif abs(b["cx"] - city_cx) < 60:
+                            if any(c in txt_upper for c in ["OLONGAPO", "SUBIC", "TARLAC"]):
+                                city_anchors.append((b["cy"], txt_upper))
+                
+                for r in rows[header_idx + 1:]:
+                    prod_b = None
+                    price_blocks = []
+                    
+                    for b in r:
+                        if abs(b["cx"] - product_cx) < 60:
+                            txt = b["text"].upper()
+                            if any(p in txt for p in ["RON", "DIESEL", "KEROSENE"]):
+                                prod_b = b
+                        
+                        txt = b["text"]
+                        if txt in ("#NIA", "NIA", "#N/A", "N/A", "-", "0.00", "批NIA", "批N/A", "桂NIA") or any(char.isdigit() for char in txt):
+                            price_blocks.append(b)
+                    
+                    if not prod_b:
+                        continue
+                    
+                    row_cy = prod_b["cy"]
+                    closest_province = ""
+                    if province_anchors:
+                        closest_province = min(province_anchors, key=lambda a: abs(a[0] - row_cy))[1]
+                        
+                    closest_city = ""
+                    if city_anchors:
+                        closest_city = min(city_anchors, key=lambda a: abs(a[0] - row_cy))[1]
+                    
+                    if "OLONGAPO" in closest_city:
+                        norm_city = "OLONGAPO CITY"
+                    elif "SUBIC" in closest_city:
+                        norm_city = "SUBIC"
+                    else:
+                        norm_city = closest_city
+                    
+                    if norm_city not in ["OLONGAPO CITY", "SUBIC"] and "ZAMBALES" not in closest_province:
+                        continue
+                    
+                    prod_val = prod_b["text"].strip().upper()
+                    if "RON" in prod_val:
+                        parts = prod_val.replace(" ", "").split("RON")
+                        if len(parts) > 1:
+                            prod_val = f"RON {parts[1]}"
+                    elif "DIESEL" in prod_val:
+                        if "PLUS" in prod_val or "ULTRA" in prod_val:
+                            prod_val = "DIESEL PLUS"
+                        else:
+                            prod_val = "DIESEL"
+                    
+                    station_prices = {}
+                    overall_range = None
+                    common_price = None
+                    
+                    for _, brand in station_columns:
+                        station_prices[brand.upper()] = None
+                        
+                    for pb in price_blocks:
+                        dists = []
+                        if range_cx is not None:
+                            dists.append((abs(pb["cx"] - range_cx), "range"))
+                        if common_cx is not None:
+                            dists.append((abs(pb["cx"] - common_cx), "common"))
+                            
+                        for cx, brand in station_columns:
+                            dists.append((abs(pb["cx"] - cx), brand.upper()))
+                            
+                        if not dists:
+                            continue
+                            
+                        best_dist, target = min(dists)
+                        if best_dist > 80:
+                            continue
+                            
+                        parsed_val = parse_price_range(pb["text"].replace("NIA", "#N/A").replace("批", "").replace("桂", ""))
+                        
+                        if target == "range":
+                            overall_range = parsed_val
+                        elif target == "common":
+                            common_price = parsed_val
+                        else:
+                            station_prices[target] = parsed_val
+                    
+                    if norm_city not in results:
+                        results[norm_city] = {}
+                        
+                    results[norm_city][prod_val] = {
+                        "stations": station_prices,
+                        "overall_range": overall_range,
+                        "common_price": common_price
+                    }
+                    
+        if results:
+            logger.info("Successfully extracted Zambales data using OCR!")
+            return json.dumps(results)
+    except Exception as e:
+        logger.error(f"Error during extract_prices_from_pdf_ocr: {e}")
+    return None
+
 def extract_price_adjustments_sync(pdf_bytes: bytes) -> Optional[str]:
     """
     Synchronously extracts price adjustments (Gasoline, Diesel, Kerosene) by Oil Company from PDF tables.
@@ -472,6 +693,9 @@ async def extract_pdf_content(pdf_bytes: bytes, category: str) -> str:
     if category == "North Luzon Pump Prices":
         try:
             parsed_json = await asyncio.to_thread(extract_prices_from_pdf_sync, pdf_bytes)
+            if parsed_json:
+                return parsed_json
+            parsed_json = await asyncio.to_thread(extract_prices_from_pdf_ocr, pdf_bytes)
             if parsed_json:
                 return parsed_json
         except Exception as e:
